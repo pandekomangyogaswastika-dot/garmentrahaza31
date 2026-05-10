@@ -14,12 +14,13 @@
  *      - Catatan (opsional)
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronDown, Plus, Lock, CheckCircle2, AlertTriangle,
   Package, BarChart3, RefreshCw, X, UserPlus, Loader2,
   Scissors, User, ArrowRight, ChevronRight, ClipboardCheck, Wrench,
+  Camera, ImageOff,
 } from 'lucide-react';
 import LusinPcsInput from './LusinPcsInput';
 import { toast } from 'sonner';
@@ -42,6 +43,142 @@ const PC = {
 };
 
 const pcOf = (code) => PC[code] || PC.RAJUT;
+
+// ── Model Photo Card ────────────────────────────────────────────────────────
+function ModelPhotoCard({ model, token }) {
+  const [imgSrc, setImgSrc] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [hasImage, setHasImage] = useState(model.has_image || false);
+  const fileRef = useRef(null);
+
+  // Try loading image on mount
+  useEffect(() => {
+    if (hasImage && model.id) {
+      setImgSrc(`${API}/api/rahaza/models/${model.id}/image?t=${Date.now()}`);
+    }
+  }, [model.id, hasImage]);
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${API}/api/rahaza/models/${model.id}/image-local`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setHasImage(true);
+      setImgSrc(`${data.image_url}?t=${Date.now()}`);
+      toast.success(`Foto model ${model.code} berhasil diupload`);
+    } catch (e) {
+      toast.error('Upload gagal: ' + e.message);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+      <div
+        className={`relative w-[56px] h-[64px] rounded-lg overflow-hidden border cursor-pointer group transition-all ${
+          hasImage ? 'border-border' : 'border-dashed border-border/60 hover:border-primary/50'
+        }`}
+        onClick={() => !hasImage && fileRef.current?.click()}
+        title={hasImage ? `${model.code} – ${model.name}` : `Upload foto untuk ${model.code}`}
+      >
+        {hasImage && imgSrc ? (
+          <>
+            <img
+              src={imgSrc}
+              alt={model.code}
+              className="w-full h-full object-cover"
+              onError={() => { setHasImage(false); setImgSrc(null); }}
+            />
+            {/* Overlay on hover to change photo */}
+            <div
+              className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+            >
+              <Camera className="w-4 h-4 text-white" />
+            </div>
+          </>
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-muted/30">
+            {uploading ? (
+              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+            ) : (
+              <>
+                <ImageOff className="w-4 h-4 text-muted-foreground/50 mb-0.5" />
+                <Camera className="w-3 h-3 text-primary/60" />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="text-center max-w-[64px]">
+        <div className="text-[9px] font-semibold text-foreground truncate leading-tight">{model.code}</div>
+        {model.size_name && (
+          <div className="text-[8px] text-muted-foreground">{model.size_name}</div>
+        )}
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleUpload}
+      />
+    </div>
+  );
+}
+
+// ── Model Photos Strip ───────────────────────────────────────────────────────
+function ModelPhotosStrip({ boardData, token }) {
+  if (!boardData?.wos?.length) return null;
+
+  // Deduplicate models (unique model_id + size_id combos)
+  const uniqueModels = [];
+  const seen = new Set();
+  for (const wo of boardData.wos) {
+    const key = `${wo.model_id}_${wo.size_id}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueModels.push({
+        id: wo.model_id,
+        code: wo.model_name || wo.wo_number,
+        name: wo.model_name || '',
+        size_name: wo.size_name || wo.size_id,
+        has_image: wo.has_image || false,
+      });
+    }
+  }
+  if (!uniqueModels.length) return null;
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2 bg-muted/10 border-b border-border overflow-x-auto">
+      <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+        <Camera className="w-3 h-3 inline mr-1" />Foto Produk:
+      </span>
+      <div className="flex items-end gap-3">
+        {uniqueModels.map(m => (
+          <ModelPhotoCard key={`${m.id}_${m.size_name}`} model={m} token={token} />
+        ))}
+      </div>
+      <span className="text-[9px] text-muted-foreground/50 whitespace-nowrap shrink-0 ml-1">
+        Klik foto/ikon kamera untuk upload
+      </span>
+    </div>
+  );
+}
 
 // ── Progress bar ──────────────────────────────────────────────────────────────
 function Bar({ value, total, dotClass }) {
@@ -1235,6 +1372,11 @@ export default function LineBoardModule({ token }) {
           <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--primary))] animate-pulse shrink-0" />
           <span>Dari Dashboard: proses <strong>{highlightProcess}</strong> ditandai sebagai bottleneck. Kolom tersebut disorot.</span>
         </div>
+      )}
+
+      {/* Model Photos Strip */}
+      {selectedOrderId && boardData && (
+        <ModelPhotosStrip boardData={boardData} token={token} />
       )}
 
       {/* Empty state */}

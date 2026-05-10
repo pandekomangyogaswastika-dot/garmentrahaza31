@@ -16,11 +16,13 @@ WIP semantics (MVP):
     perhitungan lanjut (akan diperluas di Fase 6).
 """
 from fastapi import APIRouter, Request, HTTPException, UploadFile, File
+from fastapi.responses import Response as FastAPIResponse
 from database import get_db
 from auth import require_auth, serialize_doc, log_activity
 from storage import put_object, delete_object, generate_storage_path
 import uuid
 import io
+import base64
 from datetime import datetime, timezone, date
 from typing import Optional
 
@@ -73,7 +75,10 @@ async def _require_admin(request: Request):
 async def list_models(request: Request):
     await require_auth(request)
     db = get_db()
-    rows = await db.rahaza_models.find({}, {"_id": 0}).sort("code", 1).to_list(None)
+    # Exclude image_data (large base64) from list endpoint for performance
+    rows = await db.rahaza_models.find({}, {"_id": 0, "image_data": 0}).sort("code", 1).to_list(None)
+    for r in rows:
+        r["has_image"] = bool(r.get("image_content_type"))
     return serialize_doc(rows)
 
 
@@ -138,7 +143,7 @@ async def deactivate_model(mid: str, request: Request):
 # ── MODEL IMAGES (max 3 photos per model) ──────────────────────────────────
 @router.post("/models/{mid}/images")
 async def upload_model_image(mid: str, request: Request, file: UploadFile = File(...)):
-    """Upload foto referensi untuk model (max 3 foto per model)."""
+    """Upload foto referensi untuk model (max 3 foto per model) via external storage."""
     user = await _require_admin(request)
     db = get_db()
     mod = await db.rahaza_models.find_one({"id": mid}, {"_id": 0})
@@ -147,14 +152,12 @@ async def upload_model_image(mid: str, request: Request, file: UploadFile = File
     images = list(mod.get("image_paths") or [])
     if len(images) >= 3:
         raise HTTPException(400, "Maksimal 3 foto per model. Hapus salah satu dulu.")
-    # Validate content type (header check)
     ctype = (file.content_type or "").lower()
     if not ctype.startswith("image/"):
         raise HTTPException(400, "File harus berupa gambar (jpg/png/webp)")
     data = await file.read()
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(400, "Ukuran gambar maksimal 5MB")
-    # M1: Validate magic bytes via Pillow (prevents header spoofing)
     try:
         from PIL import Image
         img = Image.open(io.BytesIO(data))
@@ -174,7 +177,6 @@ async def upload_model_image(mid: str, request: Request, file: UploadFile = File
         raise HTTPException(500, f"Upload gagal: {str(e)}")
     images.append(storage_path)
     await db.rahaza_models.update_one({"id": mid}, {"$set": {"image_paths": images, "updated_at": _now()}})
-    # Track in attachments collection for unified file tracking
     await db.attachments.insert_one({
         "id": _uid(), "storage_path": storage_path,
         "original_filename": file.filename, "content_type": ctype,
@@ -184,6 +186,62 @@ async def upload_model_image(mid: str, request: Request, file: UploadFile = File
     })
     await log_activity(user["id"], user.get("name", ""), "upload_image", "rahaza.model", mid)
     return {"image_paths": images, "added": storage_path}
+
+
+@router.post("/models/{mid}/image-local")
+async def upload_model_image_local(mid: str, request: Request, file: UploadFile = File(...)):
+    """Upload foto model - disimpan di MongoDB (tanpa external storage). Semua role bisa upload."""
+    user = await require_auth(request)
+    db = get_db()
+    mod = await db.rahaza_models.find_one({"id": mid}, {"_id": 0})
+    if not mod:
+        raise HTTPException(404, "Model tidak ditemukan")
+    ctype = (file.content_type or "").lower()
+    if not ctype.startswith("image/"):
+        raise HTTPException(400, "File harus berupa gambar (jpg/png/webp)")
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Ukuran gambar maksimal 5MB")
+    # Compress image to thumbnail for efficient storage (max 600x600, JPEG 80%)
+    try:
+        from PIL import Image as PILImage
+        img = PILImage.open(io.BytesIO(data))
+        img = img.convert("RGB")
+        img.thumbnail((600, 600), PILImage.LANCZOS)
+        output = io.BytesIO()
+        img.save(output, format='JPEG', quality=80, optimize=True)
+        compressed = output.getvalue()
+    except Exception:
+        # Fallback: store original if PIL not available
+        compressed = data
+    img_b64 = base64.b64encode(compressed).decode()
+    await db.rahaza_models.update_one(
+        {"id": mid},
+        {"$set": {"image_data": img_b64, "image_content_type": "image/jpeg", "updated_at": _now()}}
+    )
+    await log_activity(user["id"], user.get("name", ""), "upload_image_local", "rahaza.model", mid)
+    return {
+        "ok": True,
+        "image_url": f"/api/rahaza/models/{mid}/image",
+        "size_kb": round(len(compressed) / 1024, 1)
+    }
+
+
+@router.get("/models/{mid}/image")
+async def serve_model_image(mid: str):
+    """Serve model image from MongoDB base64 storage."""
+    db = get_db()
+    mod = await db.rahaza_models.find_one(
+        {"id": mid}, {"image_data": 1, "image_content_type": 1, "_id": 0}
+    )
+    if not mod or not mod.get("image_data"):
+        raise HTTPException(404, "Tidak ada foto model")
+    img_bytes = base64.b64decode(mod["image_data"])
+    return FastAPIResponse(
+        content=img_bytes,
+        media_type=mod.get("image_content_type", "image/jpeg"),
+        headers={"Cache-Control": "public, max-age=86400"}
+    )
 
 
 @router.delete("/models/{mid}/images")

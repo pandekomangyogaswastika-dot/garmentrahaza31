@@ -311,7 +311,7 @@ async def wizard_start(request: Request):
             try:
                 from routes.rahaza_bom import _quick_create_bom_from_wizard
                 new_bom = await _quick_create_bom_from_wizard(
-                    db, wo["model_id"], wo["size_id"], mat_inputs, user
+                    db, wo["model_id"], wo["size_id"], mat_inputs, user, wo_qty=wo.get("qty", 1)
                 )
                 if new_bom:
                     await db.rahaza_work_orders.update_one(

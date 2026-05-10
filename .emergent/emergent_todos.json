@@ -1,26 +1,22 @@
 [
   {
-    "content": "Fix 1: Remove Bundle from Production Wizard (subtitle, Step2, Step3, landing)",
+    "content": "Backend: Tambah endpoint upload/serve image model (local base64 storage)",
     "status": "completed"
   },
   {
-    "content": "Fix 2: Standardize order number format ORD-YYYY-XXXX di rahaza_orders.py",
+    "content": "Backend: Update wizard BOM creation - total_qty_for_wo bukan qty_per_pcs",
     "status": "completed"
   },
   {
-    "content": "Fix 3: Wizard set order status=in_production setelah WO released + better generate WO message",
+    "content": "Frontend: Material input di Wizard Step 2 - dropdown master data + inline create + kategori",
     "status": "completed"
   },
   {
-    "content": "Fix 4: Inline item creation di Production Wizard (Tambah Model Baru)",
+    "content": "Frontend: LKP (LineBoardModule) - tampil foto model + upload langsung ke master data",
     "status": "completed"
   },
   {
-    "content": "Fix 5: BOM auto-creation flow (estimated at wizard Step 2, actual at WO complete)",
-    "status": "completed"
-  },
-  {
-    "content": "Test semua 5 fixes end-to-end",
-    "status": "completed"
+    "content": "Test semua 3 improvements",
+    "status": "in_progress"
   }
 ]

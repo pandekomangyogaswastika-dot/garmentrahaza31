@@ -248,13 +248,22 @@ async def lineboard_board(order_id: str, request: Request):
             "employees_by_process": {},
         })
 
-    # ── Enrich model_name / size_name via join if missing (legacy WOs) ────────
+    # ── Enrich model_name / size_name + has_image via join if missing ────────
     missing_model_ids = list({w["model_id"] for w in wos if w.get("model_id") and not w.get("model_name")})
+    all_model_ids = list({w["model_id"] for w in wos if w.get("model_id")})
     missing_size_ids  = list({w["size_id"]  for w in wos if w.get("size_id")  and not w.get("size_name")})
     model_join, size_join = {}, {}
+    model_has_image = {}
     if missing_model_ids:
         docs = await db.rahaza_models.find({"id": {"$in": missing_model_ids}}, {"_id": 0, "id": 1, "name": 1, "code": 1}).to_list(None)
         model_join = {d["id"]: d.get("name") or d.get("code") or "" for d in docs}
+    if all_model_ids:
+        # Check which models have images
+        docs = await db.rahaza_models.find(
+            {"id": {"$in": all_model_ids}},
+            {"_id": 0, "id": 1, "image_content_type": 1}
+        ).to_list(None)
+        model_has_image = {d["id"]: bool(d.get("image_content_type")) for d in docs}
     if missing_size_ids:
         docs = await db.rahaza_sizes.find({"id": {"$in": missing_size_ids}}, {"_id": 0, "id": 1, "name": 1, "code": 1}).to_list(None)
         size_join = {d["id"]: d.get("code") or d.get("name") or "" for d in docs}
@@ -263,6 +272,7 @@ async def lineboard_board(order_id: str, request: Request):
             w["model_name"] = model_join.get(w["model_id"], "")
         if not w.get("size_name") and w.get("size_id"):
             w["size_name"] = size_join.get(w["size_id"], "")
+        w["has_image"] = model_has_image.get(w.get("model_id", ""), False)
 
     wo_ids = [w["id"] for w in wos]
     wo_map = {w["id"]: w for w in wos}

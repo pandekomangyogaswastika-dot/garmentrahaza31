@@ -251,8 +251,8 @@ async def create_material(request: Request):
 
 @router.post("/materials/quick-add")
 async def quick_add_material(request: Request):
-    """Quick add material from Material Planning modal - simplified version."""
-    user = await _require_admin(request)
+    """Quick add material from Wizard/Material Planning modal - accessible by all users."""
+    user = await require_auth(request)  # Allow any authenticated user
     db = get_db()
     body = await request.json()
     
@@ -290,7 +290,7 @@ async def quick_add_material(request: Request):
         "unit": unit,
         "yarn_type": "",
         "color": body.get("color", "").strip(),
-        "notes": f"Auto-created from Material Planning by {user.get('name', 'User')}",
+        "notes": body.get("notes") or f"Dibuat via Production Wizard oleh {user.get('name', 'User')}",
         "min_stock": 0,
         "min_stock_qty": None,
         "min_stock_percentage": None,

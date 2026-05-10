@@ -615,14 +615,16 @@ async def _derive_bom_from_material_plan(db, wo: dict, final_materials: list, us
 
 
 
-async def _quick_create_bom_from_wizard(db, model_id: str, size_id: str, materials: list, user: dict) -> dict:
+async def _quick_create_bom_from_wizard(db, model_id: str, size_id: str, materials: list, user: dict, wo_qty: int = 1) -> dict:
     """
     Quick-create a BOM from wizard material input.
-    materials: [{material_id, material_name, qty_per_pcs, unit, material_type ('yarn'|'accessory')}]
+    materials: [{material_id, material_name, material_type ('yarn'|'accessory'), total_qty_for_wo, unit}]
+    wo_qty: total pcs for this WO (used to calculate qty_per_pcs = total_qty / wo_qty)
     Returns bom_snapshot dict for the WO.
     """
     now = _now()
     uid = _uid()
+    qty_divider = max(1, wo_qty)
 
     # Deactivate any existing BOMs for this model+size
     await db.rahaza_boms.update_many(
@@ -630,32 +632,33 @@ async def _quick_create_bom_from_wizard(db, model_id: str, size_id: str, materia
         {"$set": {"is_active": False, "updated_at": now}}
     )
 
-    # Separate yarn and accessories
     yarn_mats = []
     acc_mats = []
     for m in materials:
         mat_type = (m.get("material_type") or "yarn").lower()
-        qty = float(m.get("qty_per_pcs") or 0)
-        if qty <= 0:
+        total_qty = float(m.get("total_qty_for_wo") or m.get("qty_per_pcs") or 0)
+        if total_qty <= 0:
             continue
+        qty_per_pcs = round(total_qty / qty_divider, 6)
+
         if mat_type == "yarn":
             yarn_mats.append({
                 "material_id": m.get("material_id") or "",
                 "name": m.get("material_name", ""),
-                "code": "",
+                "code": m.get("material_code") or "",
                 "yarn_type": m.get("yarn_type") or "",
-                "qty_kg": qty,
+                "qty_kg": qty_per_pcs,
                 "unit": m.get("unit") or "kg",
-                "notes": "Input via Production Wizard",
+                "notes": f"Input via Production Wizard (total {total_qty} {m.get('unit','kg')} untuk {wo_qty} pcs)",
             })
         else:
             acc_mats.append({
                 "material_id": m.get("material_id") or "",
                 "name": m.get("material_name", ""),
-                "code": "",
-                "qty": qty,
+                "code": m.get("material_code") or "",
+                "qty": qty_per_pcs,
                 "unit": m.get("unit") or "pcs",
-                "notes": "Input via Production Wizard",
+                "notes": f"Input via Production Wizard (total {total_qty} {m.get('unit','pcs')} untuk {wo_qty} pcs)",
             })
 
     total_yarn_kg = round(sum(y["qty_kg"] for y in yarn_mats), 4)
@@ -672,7 +675,7 @@ async def _quick_create_bom_from_wizard(db, model_id: str, size_id: str, materia
         "total_yarn_kg_per_pcs": total_yarn_kg,
         "yarn_count": len(yarn_mats),
         "accessory_count": len(acc_mats),
-        "notes": "Dibuat via Production Wizard (estimasi awal)",
+        "notes": f"Dibuat via Production Wizard (estimasi awal untuk {wo_qty} pcs)",
         "created_by": user["id"],
         "created_at": now,
         "updated_at": now,

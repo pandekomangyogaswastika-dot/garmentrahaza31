@@ -3,14 +3,14 @@
  * Menggabungkan Order → WO → Release jadi 1 wizard 3-step.
  * Fitur:
  *   - Step 1: Data Order (customer, model, size, qty) + inline model creation
- *   - Step 2: Preview WO + BOM status + input material jika tidak ada BOM
+ *   - Step 2: Preview WO + BOM status + input material TOTAL per WO jika tidak ada BOM
  *   - Step 3: Konfirmasi & Mulai Produksi
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Wand2, Package, FileText, CheckCircle2, AlertCircle, ChevronRight,
   ChevronLeft, Calendar, User, Boxes, Plus, X, AlertTriangle,
-  CheckCircle, Leaf, Settings2, Info
+  CheckCircle, Leaf, Info, Search, Layers, Scissors
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -322,68 +322,298 @@ const Step1OrderData = ({ form, setForm, customers, models, sizes, token, onMode
   );
 };
 
-// ── Material Input Row ────────────────────────────────────────────────────────
-const MaterialInputRow = ({ mat, idx, materials, onMaterials }) => {
-  const update = (field, val) => {
-    const next = [...materials];
-    next[idx] = { ...next[idx], [field]: val };
-    onMaterials(next);
-  };
+// ── Material Type Badge ───────────────────────────────────────────────────────
+const MatTypeBadge = ({ type }) => {
+  if (type === 'yarn') return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-blue-400/15 text-blue-300 border border-blue-400/20">
+      <Layers className="w-2.5 h-2.5" /> Benang
+    </span>
+  );
+  if (type === 'accessory') return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-amber-400/15 text-amber-300 border border-amber-400/20">
+      <Scissors className="w-2.5 h-2.5" /> Aksesoris
+    </span>
+  );
   return (
-    <div className="grid grid-cols-[2fr_1fr_1fr_auto] gap-1.5 items-center">
-      <GlassInput
-        placeholder="Nama material (e.g. Benang Akrilik)"
-        value={mat.material_name}
-        onChange={e => update('material_name', e.target.value)}
-        className="h-8 text-sm"
-      />
-      <GlassInput
-        type="number" placeholder="Qty/pcs" min="0" step="0.001"
-        value={mat.qty_per_pcs}
-        onChange={e => update('qty_per_pcs', e.target.value)}
-        className="h-8 text-sm"
-      />
-      <select
-        className="h-8 px-2 rounded-lg border border-border bg-[var(--input-surface)] text-sm"
-        value={mat.unit}
-        onChange={e => update('unit', e.target.value)}
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-muted/30 text-muted-foreground">
+      {type || 'Lainnya'}
+    </span>
+  );
+};
+
+// ── Material Searchable Combobox ───────────────────────────────────────────────
+const MaterialCombobox = ({ value, onChange, materials, placeholder = "Cari / pilih bahan..." }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef(null);
+  const selectedMat = materials.find(m => m.id === value);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const filtered = query.trim()
+    ? materials.filter(m =>
+        m.name?.toLowerCase().includes(query.toLowerCase()) ||
+        m.code?.toLowerCase().includes(query.toLowerCase())
+      )
+    : materials;
+
+  return (
+    <div className="relative" ref={ref}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 h-8 px-2 rounded-lg border border-border bg-[var(--input-surface)] cursor-pointer hover:border-primary/50 transition-colors"
       >
-        <option value="kg">kg</option>
-        <option value="gram">gram</option>
-        <option value="m">meter</option>
-        <option value="pcs">pcs</option>
-        <option value="lusin">lusin</option>
-      </select>
-      <button onClick={() => onMaterials(materials.filter((_, i) => i !== idx))}
-        className="text-muted-foreground hover:text-red-400 transition-colors">
-        <X className="w-3.5 h-3.5" />
-      </button>
+        {selectedMat ? (
+          <>
+            <MatTypeBadge type={selectedMat.type} />
+            <span className="text-xs text-foreground flex-1 truncate">{selectedMat.name}</span>
+            <span className="text-[10px] text-muted-foreground">{selectedMat.code}</span>
+          </>
+        ) : (
+          <span className="text-xs text-muted-foreground flex-1">{placeholder}</span>
+        )}
+        <Search className="w-3 h-3 text-muted-foreground shrink-0" />
+      </div>
+      {open && (
+        <div className="absolute z-50 top-9 left-0 right-0 bg-[var(--glass-bg)] border border-border rounded-lg shadow-xl overflow-hidden">
+          <div className="p-1.5 border-b border-border/60">
+            <input
+              autoFocus
+              className="w-full h-7 px-2 text-xs rounded bg-[var(--input-surface)] border border-border/40 outline-none"
+              placeholder="Ketik untuk cari..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onClick={e => e.stopPropagation()}
+            />
+          </div>
+          <div className="max-h-44 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-muted-foreground italic">Tidak ada hasil</div>
+            ) : filtered.map(m => (
+              <div
+                key={m.id}
+                onClick={() => { onChange(m); setOpen(false); setQuery(''); }}
+                className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-primary/10 transition-colors ${value === m.id ? 'bg-primary/10' : ''}`}
+              >
+                <MatTypeBadge type={m.type} />
+                <span className="text-xs text-foreground flex-1">{m.name}</span>
+                <span className="text-[10px] text-muted-foreground">{m.unit}</span>
+              </div>
+            ))}
+            <div
+              onClick={() => { onChange({ id: '__new__' }); setOpen(false); setQuery(''); }}
+              className="flex items-center gap-2 px-2 py-2 cursor-pointer hover:bg-primary/10 text-primary border-t border-border/40"
+            >
+              <Plus className="w-3 h-3" />
+              <span className="text-xs font-medium">Tambah Bahan Baru ke Master Data...</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Inline Material Create Form ───────────────────────────────────────────────
+const InlineMaterialCreateForm = ({ token, onCreated, onCancel }) => {
+  const [form, setForm] = useState({ code: '', name: '', type: 'yarn', unit: 'kg' });
+  const [saving, setSaving] = useState(false);
+  const unitsByType = {
+    yarn: ['kg', 'gram', 'cone', 'spool'],
+    accessory: ['pcs', 'lusin', 'gross', 'set', 'meter', 'cm'],
+    fg: ['pcs', 'kodi', 'lusin'],
+    packaging: ['pcs', 'roll', 'lembar'],
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { toast.error('Nama material wajib'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/rahaza/materials/quick-add', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const mat = await res.json();
+      toast.success(`Bahan "${mat.name}" ditambahkan ke master data`);
+      onCreated(mat);
+    } catch (e) { toast.error('Gagal: ' + e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
+          <Plus className="w-3 h-3" /> Tambah Bahan Baru ke Master Data
+        </span>
+        <button onClick={onCancel} className="text-muted-foreground hover:text-foreground">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Nama Bahan *</label>
+          <GlassInput placeholder="e.g. Benang Akrilik No.7" value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="h-8 text-xs" />
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Kode (opsional)</label>
+          <GlassInput placeholder="Auto-generate jika kosong" value={form.code}
+            onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} className="h-8 text-xs" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Kategori *</label>
+          <select className="w-full h-8 px-2 rounded-lg border border-border bg-[var(--input-surface)] text-xs"
+            value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, unit: unitsByType[e.target.value]?.[0] || 'kg' }))}>
+            <option value="yarn">🧵 Benang (Yarn)</option>
+            <option value="accessory">✂️ Aksesoris</option>
+            <option value="packaging">📦 Packaging</option>
+            <option value="fg">Finished Goods</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Satuan *</label>
+          <select className="w-full h-8 px-2 rounded-lg border border-border bg-[var(--input-surface)] text-xs"
+            value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
+            {(unitsByType[form.type] || ['kg', 'pcs']).map(u => (
+              <option key={u} value={u}>{u}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="flex gap-2 justify-end pt-1">
+        <Button size="sm" variant="ghost" onClick={onCancel} className="h-7 text-xs">Batal</Button>
+        <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs">
+          {saving ? 'Menyimpan...' : 'Simpan & Pilih'}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// ── Material Input Row (per bahan, qty = total untuk WO) ─────────────────────
+const MaterialSelectRow = ({ mat, idx, materials, token, onMaterialsChange, allMaterials, onNewMaterial, woQty }) => {
+  const [showCreate, setShowCreate] = useState(false);
+
+  const update = (field, val) => {
+    onMaterialsChange(idx, { ...mat, [field]: val });
+  };
+
+  const handleMaterialSelect = (selected) => {
+    if (selected.id === '__new__') {
+      setShowCreate(true);
+      return;
+    }
+    onMaterialsChange(idx, {
+      ...mat,
+      material_id: selected.id,
+      material_name: selected.name,
+      material_code: selected.code,
+      material_type: selected.type || 'yarn',
+      unit: selected.unit || (selected.type === 'accessory' ? 'pcs' : 'kg'),
+    });
+  };
+
+  const handleNewCreated = (newMat) => {
+    onNewMaterial(newMat);
+    onMaterialsChange(idx, {
+      ...mat,
+      material_id: newMat.id,
+      material_name: newMat.name,
+      material_code: newMat.code,
+      material_type: newMat.type || 'yarn',
+      unit: newMat.unit || 'kg',
+    });
+    setShowCreate(false);
+  };
+
+  const selectedMat = allMaterials.find(m => m.id === mat.material_id);
+  const unitLabel = mat.unit || (mat.material_type === 'accessory' ? 'pcs' : 'kg');
+
+  return (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-[2fr_auto_auto_auto] gap-1.5 items-center">
+        <MaterialCombobox
+          value={mat.material_id}
+          onChange={handleMaterialSelect}
+          materials={allMaterials}
+          placeholder="Pilih bahan dari master data..."
+        />
+        <div className="flex items-center gap-1">
+          <GlassInput
+            type="number" placeholder="Jumlah" min="0" step="0.001"
+            value={mat.total_qty_for_wo}
+            onChange={e => update('total_qty_for_wo', e.target.value)}
+            className="w-24 h-8 text-xs"
+          />
+          <span className="text-xs text-muted-foreground whitespace-nowrap">{unitLabel}</span>
+        </div>
+        <div className="text-[10px] text-muted-foreground whitespace-nowrap">
+          {mat.total_qty_for_wo && woQty > 0 ? (
+            <span className="text-primary/80">
+              ≈ {(parseFloat(mat.total_qty_for_wo) / woQty).toFixed(4)} {unitLabel}/pcs
+            </span>
+          ) : <span>untuk {woQty} pcs</span>}
+        </div>
+        <button onClick={() => onMaterialsChange(idx, null)}
+          className="text-muted-foreground hover:text-red-400 transition-colors">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      {showCreate && (
+        <InlineMaterialCreateForm
+          token={token}
+          onCreated={handleNewCreated}
+          onCancel={() => setShowCreate(false)}
+        />
+      )}
     </div>
   );
 };
 
 // ── Step 2: Preview WO + BOM Input ────────────────────────────────────────────
-const Step2Preview = ({ previewData, loading, materialInputs, setMaterialInputs }) => {
+const Step2Preview = ({ previewData, loading, materialInputs, setMaterialInputs, token, allMaterials, onNewMaterial }) => {
   const [expandedBOM, setExpandedBOM] = useState({});
 
   const toggleBOMInput = (idx) => {
     setExpandedBOM(prev => ({ ...prev, [idx]: !prev[idx] }));
-    if (!materialInputs[idx]) {
+    if (!materialInputs[idx] || materialInputs[idx].length === 0) {
       setMaterialInputs(prev => ({
         ...prev,
-        [idx]: [{ material_name: '', qty_per_pcs: '', unit: 'kg' }]
+        [idx]: [{ material_id: '', material_name: '', material_type: 'yarn', total_qty_for_wo: '', unit: 'kg' }]
       }));
     }
   };
 
-  const updateMaterials = (idx, mats) => {
-    setMaterialInputs(prev => ({ ...prev, [idx]: mats }));
+  const updateMaterialRow = (idx, rowIdx, value) => {
+    setMaterialInputs(prev => {
+      const rows = [...(prev[idx] || [])];
+      if (value === null) {
+        rows.splice(rowIdx, 1);
+      } else {
+        rows[rowIdx] = value;
+      }
+      return { ...prev, [idx]: rows };
+    });
   };
 
   const addMaterialRow = (idx) => {
     setMaterialInputs(prev => ({
       ...prev,
-      [idx]: [...(prev[idx] || []), { material_name: '', qty_per_pcs: '', unit: 'kg' }]
+      [idx]: [...(prev[idx] || []), { material_id: '', material_name: '', material_type: 'yarn', total_qty_for_wo: '', unit: 'kg' }]
     }));
   };
 
@@ -411,7 +641,7 @@ const Step2Preview = ({ previewData, loading, materialInputs, setMaterialInputs 
 
   return (
     <div className="space-y-4" data-testid="production-wizard-step-preview">
-      {/* Summary Card */}
+      {/* Summary */}
       <GlassCard className="p-4">
         <div className="text-sm font-semibold text-foreground mb-3">Ringkasan</div>
         <div className="grid grid-cols-2 gap-4">
@@ -426,22 +656,20 @@ const Step2Preview = ({ previewData, loading, materialInputs, setMaterialInputs 
         </div>
       </GlassCard>
 
-      {/* BOM Warning Banner */}
       {noBomItems.length > 0 && (
         <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-400/10 border border-amber-300/20">
           <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="text-sm text-amber-300/90">
-            <strong>{noBomItems.length} item tidak memiliki BOM.</strong> WO akan dibuat tanpa BOM.
-            Anda dapat input estimasi bahan di bawah agar BOM terbentuk otomatis,
-            atau input aktual setelah WO selesai di modul Work Order.
+            <strong>{noBomItems.length} item tidak memiliki BOM.</strong>{' '}
+            Input estimasi bahan di bawah agar BOM terbentuk otomatis.
+            Atau biarkan kosong, input aktual di WO setelah produksi selesai.
           </div>
         </div>
       )}
 
-      {/* Detail per Item */}
       <div>
         <div className="text-sm font-semibold text-foreground mb-2">Detail WO yang akan dibuat:</div>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {(previewData.items || []).map((item, idx) => (
             <GlassCard key={idx} className="p-3 space-y-2">
               <div className="flex items-center justify-between">
@@ -449,13 +677,14 @@ const Step2Preview = ({ previewData, loading, materialInputs, setMaterialInputs 
                   <div className="text-sm font-medium text-foreground">
                     {item.model_code || '—'} · {item.size_code || '—'}
                   </div>
-                  <div className="text-xs text-muted-foreground">{item.model_name || 'Model'}</div>
+                  <div className="text-xs text-muted-foreground">{item.model_name}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-mono text-primary">{item.qty} pcs</div>
+                  <div className="text-sm font-mono text-primary font-bold">{item.qty} pcs</div>
                   {item.has_bom ? (
                     <div className="flex items-center gap-1 text-xs text-emerald-400">
-                      <CheckCircle className="w-3 h-3" /> BOM tersedia
+                      <CheckCircle className="w-3 h-3" />
+                      BOM: {item.bom_yarn_count} benang · {item.bom_accessory_count} aksesoris
                     </div>
                   ) : (
                     <button
@@ -463,43 +692,47 @@ const Step2Preview = ({ previewData, loading, materialInputs, setMaterialInputs 
                       className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors"
                     >
                       <AlertTriangle className="w-3 h-3" />
-                      {expandedBOM[idx] ? 'Tutup input' : 'Input estimasi bahan'}
+                      {expandedBOM[idx] ? 'Tutup input bahan' : 'Input estimasi bahan (opsional)'}
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Material Input Form (if no BOM and expanded) */}
               {!item.has_bom && expandedBOM[idx] && (
-                <div className="border-t border-border/40 pt-2 space-y-2">
+                <div className="border-t border-border/40 pt-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-foreground/70 flex items-center gap-1">
-                      <Leaf className="w-3 h-3 text-primary" />
-                      Estimasi bahan per 1 pcs (opsional)
+                    <span className="text-xs font-semibold text-foreground/80 flex items-center gap-1.5">
+                      <Leaf className="w-3.5 h-3.5 text-primary" />
+                      Estimasi bahan untuk WO ini (total {item.qty} pcs)
                     </span>
-                    <div className="text-[10px] text-muted-foreground">Nama · Qty/pcs · Satuan</div>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="bg-primary/5 rounded p-2 text-[11px] text-primary/80 flex items-center gap-1.5">
+                    <Info className="w-3 h-3 shrink-0" />
+                    Input total bahan untuk <strong>{item.qty} pcs</strong>.
+                    Sistem akan hitung otomatis qty per-pcs untuk BOM.
+                    Bahan benang (yarn) dan aksesoris bisa dicampur.
+                  </div>
+
+                  <div className="space-y-2">
                     {(materialInputs[idx] || []).map((mat, mIdx) => (
-                      <MaterialInputRow
+                      <MaterialSelectRow
                         key={mIdx}
                         mat={mat}
                         idx={mIdx}
-                        materials={materialInputs[idx] || []}
-                        onMaterials={(mats) => updateMaterials(idx, mats)}
+                        token={token}
+                        allMaterials={allMaterials}
+                        onMaterialsChange={(rIdx, val) => updateMaterialRow(idx, rIdx, val)}
+                        onNewMaterial={onNewMaterial}
+                        woQty={item.qty}
                       />
                     ))}
                   </div>
                   <button
                     onClick={() => addMaterialRow(idx)}
-                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors py-1"
                   >
-                    <Plus className="w-3 h-3" /> Tambah bahan
+                    <Plus className="w-3.5 h-3.5" /> Tambah bahan lagi
                   </button>
-                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Info className="w-3 h-3" />
-                    BOM akan dibuat otomatis saat wizard dijalankan.
-                  </div>
                 </div>
               )}
             </GlassCard>
@@ -587,6 +820,7 @@ export default function ProductionWizardModule({ token, isGlobalMount = false })
   const [customers, setCustomers] = useState([]);
   const [models, setModels] = useState([]);
   const [sizes, setSizes] = useState([]);
+  const [allMaterials, setAllMaterials] = useState([]); // master data bahan
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -600,14 +834,16 @@ export default function ProductionWizardModule({ token, isGlobalMount = false })
 
   const fetchMasterData = async () => {
     try {
-      const [c, m, s] = await Promise.all([
+      const [c, m, s, mats] = await Promise.all([
         fetch('/api/rahaza/customers?active=true&limit=200', { headers }).then(r => r.json()),
         fetch('/api/rahaza/models?active=true&limit=200', { headers }).then(r => r.json()),
         fetch('/api/rahaza/sizes?active=true&limit=200', { headers }).then(r => r.json()),
+        fetch('/api/rahaza/materials?limit=500', { headers }).then(r => r.json()),
       ]);
       setCustomers(Array.isArray(c) ? c : c.items || []);
       setModels(Array.isArray(m) ? m : m.items || []);
       setSizes(Array.isArray(s) ? s : s.items || []);
+      setAllMaterials(Array.isArray(mats) ? mats : mats.items || []);
     } catch (e) {
       console.error('Failed to fetch master data:', e);
     }
@@ -615,6 +851,10 @@ export default function ProductionWizardModule({ token, isGlobalMount = false })
 
   const handleModelsRefresh = (newModel) => {
     setModels(prev => [...prev, newModel]);
+  };
+
+  const handleNewMaterial = (newMat) => {
+    setAllMaterials(prev => [...prev, newMat]);
   };
 
   const validateStep1 = () => {
@@ -670,12 +910,14 @@ export default function ProductionWizardModule({ token, isGlobalMount = false })
         .map((i, idx) => {
           // Attach material inputs for items without BOM
           const mats = (materialInputs[idx] || [])
-            .filter(m => m.material_name && parseFloat(m.qty_per_pcs) > 0)
+            .filter(m => m.material_name && parseFloat(m.total_qty_for_wo) > 0)
             .map(m => ({
+              material_id: m.material_id || '',
               material_name: m.material_name,
-              qty_per_pcs: parseFloat(m.qty_per_pcs),
+              material_code: m.material_code || '',
+              material_type: m.material_type || 'yarn',
+              total_qty_for_wo: parseFloat(m.total_qty_for_wo),
               unit: m.unit || 'kg',
-              material_type: 'yarn',
             }));
           return {
             model_id: i.model_id,
@@ -815,6 +1057,7 @@ export default function ProductionWizardModule({ token, isGlobalMount = false })
               <Step2Preview
                 previewData={previewData} loading={previewLoading}
                 materialInputs={materialInputs} setMaterialInputs={setMaterialInputs}
+                token={token} allMaterials={allMaterials} onNewMaterial={handleNewMaterial}
               />
             )}
             {step === 3 && (
