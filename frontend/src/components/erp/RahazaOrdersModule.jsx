@@ -231,7 +231,11 @@ export default function RahazaOrdersModule({ token, onNavigate }) {
       }
       const data = await res.json();
       setRateModal(null);
-      alert(`Generate WO selesai.\nDibuat: ${data.total_created} WO\nDilewati: ${data.skipped.length} item (sudah punya WO aktif)`);
+      if (data.total_created === 0 && data.skipped?.length > 0) {
+        alert(`ℹ️ Semua item sudah memiliki WO aktif (${data.skipped.length} item dilewati).\n\nWO sudah tersedia di modul Work Order. Gunakan filter untuk melihat WO dari order ini.`);
+      } else {
+        alert(`✅ Generate WO selesai.\nDibuat: ${data.total_created} WO${data.skipped?.length > 0 ? `\nDilewati: ${data.skipped.length} item (sudah punya WO aktif)` : ''}`);
+      }
       fetchOrders();
       if (detailOrder?.id === order.id) openDetail(order);
     } catch (err) {
@@ -304,6 +308,14 @@ export default function RahazaOrdersModule({ token, onNavigate }) {
             render: (r) => <span className="font-semibold">{r.total_qty || 0} pcs</span> },
           { key: 'due_date', label: 'Due', sortable: true,
             render: (r, v) => <span className="text-foreground/70">{v || '—'}</span> },
+          { key: 'wo_count', label: 'WO', align: 'right', sortable: true,
+            render: (r) => (
+              <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${
+                r.wo_count > 0 ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
+              }`}>
+                {r.wo_count || 0} WO
+              </span>
+            )},
           { key: 'status', label: 'Status',
             render: (r) => <StatusBadge status={r.status} /> },
         ]}

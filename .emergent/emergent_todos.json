@@ -1,38 +1,26 @@
 [
   {
-    "content": "Phase 0: Migrate repo ke /app (backend + frontend)",
+    "content": "Fix 1: Remove Bundle from Production Wizard (subtitle, Step2, Step3, landing)",
     "status": "completed"
   },
   {
-    "content": "Phase 0: Setup .env (DB_NAME=garment_erp, JWT_SECRET)",
+    "content": "Fix 2: Standardize order number format ORD-YYYY-XXXX di rahaza_orders.py",
     "status": "completed"
   },
   {
-    "content": "Phase 0: Install backend dependencies (requirements.txt)",
+    "content": "Fix 3: Wizard set order status=in_production setelah WO released + better generate WO message",
     "status": "completed"
   },
   {
-    "content": "Phase 0: Install frontend dependencies (package.json)",
+    "content": "Fix 4: Inline item creation di Production Wizard (Tambah Model Baru)",
     "status": "completed"
   },
   {
-    "content": "Fix A: QC/Rework modals di LineBoard (full UI implementation)",
+    "content": "Fix 5: BOM auto-creation flow (estimated at wizard Step 2, actual at WO complete)",
     "status": "completed"
   },
   {
-    "content": "Fix B: WO Traceability endpoint total=0 (data mapping fix)",
-    "status": "completed"
-  },
-  {
-    "content": "Fix C: Material Issue & Payroll endpoint verification/fix",
-    "status": "completed"
-  },
-  {
-    "content": "Fix D: Rework Analytics event-based endpoint wiring",
-    "status": "completed"
-  },
-  {
-    "content": "End-to-end testing semua fixes + app",
-    "status": "completed"
+    "content": "Test semua 5 fixes end-to-end",
+    "status": "in_progress"
   }
 ]

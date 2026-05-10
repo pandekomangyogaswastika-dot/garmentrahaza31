@@ -612,3 +612,79 @@ async def _derive_bom_from_material_plan(db, wo: dict, final_materials: list, us
     )
     await db.rahaza_boms.insert_one(bom_doc)
     await log_activity(user["id"], user.get("name", ""), "derive_bom", "rahaza.bom", new_id)
+
+
+
+async def _quick_create_bom_from_wizard(db, model_id: str, size_id: str, materials: list, user: dict) -> dict:
+    """
+    Quick-create a BOM from wizard material input.
+    materials: [{material_id, material_name, qty_per_pcs, unit, material_type ('yarn'|'accessory')}]
+    Returns bom_snapshot dict for the WO.
+    """
+    now = _now()
+    uid = _uid()
+
+    # Deactivate any existing BOMs for this model+size
+    await db.rahaza_boms.update_many(
+        {"model_id": model_id, "size_id": size_id, "active": True},
+        {"$set": {"is_active": False, "updated_at": now}}
+    )
+
+    # Separate yarn and accessories
+    yarn_mats = []
+    acc_mats = []
+    for m in materials:
+        mat_type = (m.get("material_type") or "yarn").lower()
+        qty = float(m.get("qty_per_pcs") or 0)
+        if qty <= 0:
+            continue
+        if mat_type == "yarn":
+            yarn_mats.append({
+                "material_id": m.get("material_id") or "",
+                "name": m.get("material_name", ""),
+                "code": "",
+                "yarn_type": m.get("yarn_type") or "",
+                "qty_kg": qty,
+                "unit": m.get("unit") or "kg",
+                "notes": "Input via Production Wizard",
+            })
+        else:
+            acc_mats.append({
+                "material_id": m.get("material_id") or "",
+                "name": m.get("material_name", ""),
+                "code": "",
+                "qty": qty,
+                "unit": m.get("unit") or "pcs",
+                "notes": "Input via Production Wizard",
+            })
+
+    total_yarn_kg = round(sum(y["qty_kg"] for y in yarn_mats), 4)
+
+    bom_doc = {
+        "id": uid,
+        "model_id": model_id,
+        "size_id": size_id,
+        "version": 1,
+        "is_active": True,
+        "active": True,
+        "yarn_materials": yarn_mats,
+        "accessory_materials": acc_mats,
+        "total_yarn_kg_per_pcs": total_yarn_kg,
+        "yarn_count": len(yarn_mats),
+        "accessory_count": len(acc_mats),
+        "notes": "Dibuat via Production Wizard (estimasi awal)",
+        "created_by": user["id"],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.rahaza_boms.insert_one(bom_doc)
+    await log_activity(user["id"], user.get("name", ""), "quick_create_bom", "rahaza.bom", uid)
+
+    return {
+        "bom_id": uid,
+        "yarn_materials": yarn_mats,
+        "accessory_materials": acc_mats,
+        "total_yarn_kg_per_pcs": total_yarn_kg,
+        "yarn_count": len(yarn_mats),
+        "accessory_count": len(acc_mats),
+    }

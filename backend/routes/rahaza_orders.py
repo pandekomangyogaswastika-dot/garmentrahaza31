@@ -111,10 +111,19 @@ async def deactivate_customer(cid: str, request: Request):
 
 # ── ORDERS ──────────────────────────────────────────────────────────────────
 async def _gen_order_number(db):
-    today = date.today().strftime("%Y%m%d")
-    prefix = f"ORD-{today}"
-    count = await db.rahaza_orders.count_documents({"order_number": {"$regex": f"^{prefix}"}})
-    return f"{prefix}-{count+1:03d}"
+    """Generate order number in ORD-YYYY-XXXX format (consistent with wizard)."""
+    year = date.today().year
+    last = await db.rahaza_orders.find_one(
+        {"order_number": {"$regex": f"^ORD-{year}-"}},
+        sort=[("order_number", -1)]
+    )
+    seq = 1
+    if last:
+        try:
+            seq = int(last["order_number"].split("-")[-1]) + 1
+        except Exception:
+            seq = 1
+    return f"ORD-{year}-{seq:04d}"
 
 
 async def _enrich_orders(db, orders):
@@ -132,6 +141,18 @@ async def _enrich_orders(db, orders):
         items = o.get("items") or []
         o["total_qty"] = sum(int(i.get("qty") or 0) for i in items)
         o["item_count"] = len(items)
+    # Enrich with WO count
+    order_ids = [o["id"] for o in orders if o.get("id")]
+    if order_ids:
+        wo_counts = {}
+        async for wo in db.rahaza_work_orders.find(
+            {"order_id": {"$in": order_ids}, "status": {"$ne": "cancelled"}},
+            {"order_id": 1, "_id": 0}
+        ):
+            oid = wo.get("order_id")
+            wo_counts[oid] = wo_counts.get(oid, 0) + 1
+        for o in orders:
+            o["wo_count"] = wo_counts.get(o["id"], 0)
     return orders
 
 

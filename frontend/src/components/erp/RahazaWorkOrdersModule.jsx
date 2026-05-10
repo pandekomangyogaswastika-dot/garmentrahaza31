@@ -829,7 +829,7 @@ export default function RahazaWorkOrdersModule({ token, onNavigate }) {
                   <div className="border-t border-[var(--glass-border)] pt-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-medium text-muted-foreground">Material Akhir (Aktual)</span>
-                      {detail.material_plan?.initial_materials?.length > 0 && !detail.material_plan?.final_materials?.length && (
+      {!detail.material_plan?.final_materials?.length && (
                         <Button size="sm" variant="outline" onClick={() => openMatPlanFinal(detail)} data-testid="mat-plan-final-btn">
                           Input Material Akhir
                         </Button>
@@ -858,7 +858,7 @@ export default function RahazaWorkOrdersModule({ token, onNavigate }) {
                     ) : detail.material_plan?.initial_materials?.length > 0 ? (
                       <div className="text-xs text-amber-300/80 italic">Menunggu WO selesai untuk input aktual</div>
                     ) : (
-                      <div className="text-xs text-foreground/50 italic">Material awal belum diisi</div>
+                      <div className="text-xs text-amber-300/70 italic">Belum ada data material. Klik "Input Material Akhir" untuk catat penggunaan aktual &amp; buat BOM otomatis.</div>
                     )}
                   </div>
                 </div>
