@@ -1,18 +1,18 @@
 [
   {
+    "content": "Testing — Call testing_agent_v3 untuk comprehensive test (frontend + backend)",
+    "status": "completed"
+  },
+  {
+    "content": "Fix semua bug priority tinggi yang ditemukan testing agent",
+    "status": "completed"
+  },
+  {
     "content": "Issue #4 — Pindahkan setup borongan ke Production Wizard (frontend)",
     "status": "pending"
   },
   {
     "content": "Issue #4 — Update backend wizard untuk terima process_rates",
-    "status": "pending"
-  },
-  {
-    "content": "Testing — Call testing_agent_v3 untuk comprehensive test (frontend + backend)",
-    "status": "in_progress"
-  },
-  {
-    "content": "Fix semua bug priority tinggi yang ditemukan testing agent",
     "status": "pending"
   },
   {
