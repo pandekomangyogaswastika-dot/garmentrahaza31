@@ -10,14 +10,26 @@ export default function LusinPcsInput({ value = 0, onChange, disabled = false, m
   const sisaVal  = value % 12;
 
   function handleLusin(e) {
-    const l = Math.max(0, parseInt(e.target.value) || 0);
+    const rawValue = e.target.value;
+    // Allow empty or typing state, but normalize on value change
+    if (rawValue === '') {
+      onChange(sisaVal); // Reset to just sisa
+      return;
+    }
+    const l = Math.max(0, parseInt(rawValue, 10) || 0);
     const total = l * 12 + sisaVal;
     if (max !== null && total > max) return;
     onChange(total);
   }
 
   function handleSisa(e) {
-    const s = Math.max(0, Math.min(11, parseInt(e.target.value) || 0));
+    const rawValue = e.target.value;
+    // Allow empty or typing state
+    if (rawValue === '') {
+      onChange(lusinVal * 12); // Reset to just lusin
+      return;
+    }
+    const s = Math.max(0, Math.min(11, parseInt(rawValue, 10) || 0));
     const total = lusinVal * 12 + s;
     if (max !== null && total > max) return;
     onChange(total);
@@ -34,6 +46,13 @@ export default function LusinPcsInput({ value = 0, onChange, disabled = false, m
           min={0}
           value={lusinVal}
           onChange={handleLusin}
+          onBlur={(e) => {
+            // Remove leading zeros on blur
+            const normalized = parseInt(e.target.value, 10) || 0;
+            if (e.target.value !== String(normalized)) {
+              handleLusin({ target: { value: String(normalized) } });
+            }
+          }}
           disabled={disabled}
           className={`w-14 text-center border rounded-md px-1.5 py-1.5 text-sm font-mono
             focus:outline-none focus:ring-2 focus:ring-primary/40
@@ -51,6 +70,13 @@ export default function LusinPcsInput({ value = 0, onChange, disabled = false, m
           max={11}
           value={sisaVal}
           onChange={handleSisa}
+          onBlur={(e) => {
+            // Remove leading zeros on blur
+            const normalized = parseInt(e.target.value, 10) || 0;
+            if (e.target.value !== String(normalized)) {
+              handleSisa({ target: { value: String(normalized) } });
+            }
+          }}
           disabled={disabled}
           className={`w-12 text-center border rounded-md px-1.5 py-1.5 text-sm font-mono
             focus:outline-none focus:ring-2 focus:ring-primary/40

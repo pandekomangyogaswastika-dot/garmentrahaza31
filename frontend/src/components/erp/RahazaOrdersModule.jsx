@@ -6,6 +6,7 @@ import Modal from './Modal';
 import { AuditHistoryDrawer } from './AuditHistoryDrawer';
 import { DataTable } from './DataTableV2';
 import { PageHeader } from './moduleAtoms';
+import { toast } from 'sonner';
 
 const STATUS_COLORS = {
   draft:         { bg: 'bg-slate-400/15',  border: 'border-slate-300/25',  text: 'text-slate-300',   label: 'Draft' },
@@ -25,6 +26,157 @@ function StatusBadge({ status }) {
   );
 }
 
+// ── Inline Customer Creation Form ─────────────────────────────────────────────
+const InlineCustomerCreateForm = ({ token, onCreated, onCancel }) => {
+  const [form, setForm] = useState({
+    code: '', name: '', company_type: 'company', npwp: '', phone: '', email: '', address: '',
+    payment_terms: 'net_30', payment_terms_custom: '', credit_limit: 0, notes: ''
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!form.code.trim() || !form.name.trim()) {
+      toast.error('Kode dan Nama wajib diisi');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/rahaza/customers', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const newCustomer = await res.json();
+      toast.success(`Customer "${newCustomer.name}" berhasil dibuat`);
+      onCreated(newCustomer);
+    } catch (e) {
+      toast.error('Gagal membuat customer: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 p-3 rounded-lg border border-primary/30 bg-primary/5 space-y-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
+          <Plus className="w-3 h-3" /> Tambah Customer Baru
+        </span>
+        <button onClick={onCancel} className="text-muted-foreground hover:text-foreground">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Kode *</label>
+          <GlassInput
+            placeholder="CUST-001"
+            value={form.code}
+            onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+            className="h-8 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Nama *</label>
+          <GlassInput
+            placeholder="Nama customer"
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Tipe</label>
+          <select
+            className="w-full h-8 px-2 rounded-lg border border-border bg-[var(--input-surface)] text-sm"
+            value={form.company_type}
+            onChange={e => setForm(f => ({ ...f, company_type: e.target.value }))}
+          >
+            <option value="company">Perusahaan</option>
+            <option value="personal">Perorangan</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">NPWP</label>
+          <GlassInput
+            placeholder="Opsional"
+            value={form.npwp}
+            onChange={e => setForm(f => ({ ...f, npwp: e.target.value }))}
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Telepon</label>
+          <GlassInput
+            placeholder="Opsional"
+            value={form.phone}
+            onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+            className="h-8 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Email</label>
+          <GlassInput
+            placeholder="Opsional"
+            value={form.email}
+            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-[10px] text-muted-foreground mb-0.5">Alamat</label>
+        <GlassInput
+          placeholder="Opsional"
+          value={form.address}
+          onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+          className="h-8 text-sm"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Term Bayar</label>
+          <select
+            className="w-full h-8 px-2 rounded-lg border border-border bg-[var(--input-surface)] text-sm"
+            value={form.payment_terms}
+            onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))}
+          >
+            <option value="cash">Cash / Tunai</option>
+            <option value="net_7">Net 7 hari</option>
+            <option value="net_14">Net 14 hari</option>
+            <option value="net_30">Net 30 hari</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Limit Kredit (Rp)</label>
+          <GlassInput
+            type="number"
+            placeholder="0"
+            value={form.credit_limit}
+            onChange={e => setForm(f => ({ ...f, credit_limit: e.target.value }))}
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2 justify-end pt-1">
+        <Button size="sm" variant="ghost" onClick={onCancel} className="h-7 text-xs">Batal</Button>
+        <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs">
+          {saving ? 'Menyimpan...' : 'Simpan Customer'}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 export default function RahazaOrdersModule({ token, onNavigate }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +188,7 @@ export default function RahazaOrdersModule({ token, onNavigate }) {
   const [models, setModels] = useState([]);
   const [sizes, setSizes] = useState([]);
   const [statuses, setStatuses] = useState([]);
+  const [showCreateCustomer, setShowCreateCustomer] = useState(false);
 
   const [form, setForm] = useState({
     order_date: new Date().toISOString().slice(0,10),
@@ -72,6 +225,7 @@ export default function RahazaOrdersModule({ token, onNavigate }) {
 
   const openCreate = () => {
     setEditing(null);
+    setShowCreateCustomer(false);
     setForm({
       order_date: new Date().toISOString().slice(0,10),
       due_date: '', customer_id: '', is_internal: false, notes: '',
@@ -85,6 +239,7 @@ export default function RahazaOrdersModule({ token, onNavigate }) {
     if (!res.ok) return;
     const full = await res.json();
     setEditing(full);
+    setShowCreateCustomer(false);
     setForm({
       order_date: full.order_date || '',
       due_date: full.due_date || '',
@@ -336,7 +491,7 @@ export default function RahazaOrdersModule({ token, onNavigate }) {
         rowActions={(o) => (
           <div className="inline-flex items-center gap-1">
             <button onClick={() => openDetail(o)} className="p-1.5 rounded hover:bg-[var(--glass-bg-hover)] text-muted-foreground hover:text-foreground" title="Detail" data-testid={`order-detail-${o.order_number}`}><Eye className="w-3.5 h-3.5" /></button>
-            {['draft','confirmed','in_production'].includes(o.status) && (
+            {['draft','confirmed','in_production'].includes(o.status) && o.wo_count === 0 && (
               <button
                 onClick={() => generateWO(o)}
                 disabled={generating === o.id}
@@ -381,12 +536,30 @@ export default function RahazaOrdersModule({ token, onNavigate }) {
             {!form.is_internal && (
               <div>
                 <label className="block text-xs font-medium text-foreground/70 mb-1">Pelanggan <span className="text-red-400">*</span></label>
-                <select value={form.customer_id} onChange={e => setForm({...form, customer_id: e.target.value})}
+                <select value={form.customer_id} onChange={e => {
+                  if (e.target.value === '__create_new__') {
+                    setShowCreateCustomer(true);
+                    return;
+                  }
+                  setForm({...form, customer_id: e.target.value});
+                }}
                   className="w-full h-10 px-3 rounded-lg border border-[var(--glass-border)] bg-[var(--input-surface)] text-sm text-foreground"
                   data-testid="order-field-customer_id">
                   <option value="">— Pilih Pelanggan —</option>
                   {customers.filter(c => c.active).map(c => <option key={c.id} value={c.id}>{c.code} · {c.name}</option>)}
+                  <option value="__create_new__" className="text-primary font-medium">✚ Tambah Customer Baru...</option>
                 </select>
+                {showCreateCustomer && (
+                  <InlineCustomerCreateForm
+                    token={token}
+                    onCreated={(newCustomer) => {
+                      setForm({...form, customer_id: newCustomer.id});
+                      setCustomers(prev => [...prev, newCustomer]);
+                      setShowCreateCustomer(false);
+                    }}
+                    onCancel={() => setShowCreateCustomer(false)}
+                  />
+                )}
               </div>
             )}
 
@@ -483,7 +656,7 @@ export default function RahazaOrdersModule({ token, onNavigate }) {
                 </Button>
               </div>
               <div className="flex flex-wrap gap-2">
-                {['draft','confirmed','in_production'].includes(detailOrder.status) && (
+                {['draft','confirmed','in_production'].includes(detailOrder.status) && detailOrder.wo_count === 0 && (
                   <Button
                     variant="ghost"
                     onClick={() => generateWO(detailOrder)}
@@ -494,6 +667,11 @@ export default function RahazaOrdersModule({ token, onNavigate }) {
                     <ClipboardList className="w-3.5 h-3.5" />
                     {generating === detailOrder.id ? 'Generating...' : 'Generate Work Orders'}
                   </Button>
+                )}
+                {detailOrder.wo_count > 0 && (
+                  <div className="text-xs text-muted-foreground italic">
+                    WO sudah tersedia ({detailOrder.wo_count} WO). Gunakan filter di modul Work Order untuk melihat detailnya.
+                  </div>
                 )}
                 {(statuses.find(s => s.value === detailOrder.status)?.allowed_next || []).map(ns => (
                   <Button key={ns} variant="ghost" onClick={() => transition(detailOrder, ns)} className="gap-1.5 border border-[var(--glass-border)]" data-testid={`order-transition-${ns}`}>

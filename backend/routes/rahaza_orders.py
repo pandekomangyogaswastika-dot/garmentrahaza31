@@ -312,6 +312,39 @@ async def transition_status(oid: str, request: Request):
     current = order.get("status", "draft")
     if new_status not in ALLOWED_TRANSITIONS.get(current, []):
         raise HTTPException(400, f"Tidak bisa pindah dari '{current}' ke '{new_status}'. Transisi valid: {ALLOWED_TRANSITIONS.get(current, [])}")
+    
+    # ── VALIDATION: Block completion if no WO has reached PACKING ────────────────
+    if new_status == "completed":
+        # Get all work orders for this order
+        wos = await db.rahaza_work_orders.find(
+            {"order_id": oid, "status": {"$ne": "cancelled"}}, {"_id": 0}
+        ).to_list(None)
+        
+        if not wos:
+            raise HTTPException(
+                400, 
+                "Order tidak bisa diselesaikan: belum ada Work Order yang dibuat. "
+                "Generate WO terlebih dahulu."
+            )
+        
+        # Check if any WO has PACKING output events
+        wo_ids = [w["id"] for w in wos]
+        packing_events = await db.rahaza_wip_events.count_documents({
+            "work_order_id": {"$in": wo_ids},
+            "process_code": "PACKING",
+            "event_type": "output",
+            "qty": {"$gt": 0}
+        })
+        
+        if packing_events == 0:
+            raise HTTPException(
+                400,
+                "Order tidak bisa diselesaikan: produksi belum mencapai tahap PACKING. "
+                "Pastikan minimal 1 Work Order sudah diproses hingga tahap Packing "
+                "dengan output > 0 sebelum menyelesaikan order."
+            )
+    # ────────────────────────────────────────────────────────────────────────────
+    
     update = {"status": new_status, "updated_at": _now()}
     # Stamp timestamps for key statuses
     if new_status == "confirmed":     update["confirmed_at"]     = _now()

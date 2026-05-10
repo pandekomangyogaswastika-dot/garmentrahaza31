@@ -151,9 +151,161 @@ const InlineModelCreateForm = ({ token, onCreated, onCancel }) => {
   );
 };
 
+// ── Inline Customer Creation Form ────────────────────────────────────────────
+const InlineCustomerCreateForm = ({ token, onCreated, onCancel }) => {
+  const [form, setForm] = useState({
+    code: '', name: '', company_type: 'company', npwp: '', phone: '', email: '', address: '',
+    payment_terms: 'net_30', payment_terms_custom: '', credit_limit: 0, notes: ''
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!form.code.trim() || !form.name.trim()) {
+      toast.error('Kode dan Nama wajib diisi');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/rahaza/customers', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const newCustomer = await res.json();
+      toast.success(`Customer "${newCustomer.name}" berhasil dibuat`);
+      onCreated(newCustomer);
+    } catch (e) {
+      toast.error('Gagal membuat customer: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 p-3 rounded-lg border border-primary/30 bg-primary/5 space-y-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
+          <Plus className="w-3 h-3" /> Tambah Customer Baru
+        </span>
+        <button onClick={onCancel} className="text-muted-foreground hover:text-foreground">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Kode *</label>
+          <GlassInput
+            placeholder="CUST-001"
+            value={form.code}
+            onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+            className="h-8 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Nama *</label>
+          <GlassInput
+            placeholder="Nama customer"
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Tipe</label>
+          <select
+            className="w-full h-8 px-2 rounded-lg border border-border bg-[var(--input-surface)] text-sm"
+            value={form.company_type}
+            onChange={e => setForm(f => ({ ...f, company_type: e.target.value }))}
+          >
+            <option value="company">Perusahaan</option>
+            <option value="personal">Perorangan</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">NPWP</label>
+          <GlassInput
+            placeholder="Opsional"
+            value={form.npwp}
+            onChange={e => setForm(f => ({ ...f, npwp: e.target.value }))}
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Telepon</label>
+          <GlassInput
+            placeholder="Opsional"
+            value={form.phone}
+            onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+            className="h-8 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Email</label>
+          <GlassInput
+            placeholder="Opsional"
+            value={form.email}
+            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-[10px] text-muted-foreground mb-0.5">Alamat</label>
+        <GlassInput
+          placeholder="Opsional"
+          value={form.address}
+          onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+          className="h-8 text-sm"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Term Bayar</label>
+          <select
+            className="w-full h-8 px-2 rounded-lg border border-border bg-[var(--input-surface)] text-sm"
+            value={form.payment_terms}
+            onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))}
+          >
+            <option value="cash">Cash / Tunai</option>
+            <option value="net_7">Net 7 hari</option>
+            <option value="net_14">Net 14 hari</option>
+            <option value="net_30">Net 30 hari</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted-foreground mb-0.5">Limit Kredit (Rp)</label>
+          <GlassInput
+            type="number"
+            placeholder="0"
+            value={form.credit_limit}
+            onChange={e => setForm(f => ({ ...f, credit_limit: e.target.value }))}
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2 justify-end pt-1">
+        <Button size="sm" variant="ghost" onClick={onCancel} className="h-7 text-xs">Batal</Button>
+        <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs">
+          {saving ? 'Menyimpan...' : 'Simpan Customer'}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 // ── Step 1: Data Order ────────────────────────────────────────────────────────
 const Step1OrderData = ({ form, setForm, customers, models, sizes, token, onModelsRefresh }) => {
   const [showCreateModel, setShowCreateModel] = useState(null); // idx of item showing create form
+  const [showCreateCustomer, setShowCreateCustomer] = useState(false);
 
   const handleModelCreated = (idx, newModel) => {
     onModelsRefresh(newModel);
@@ -161,6 +313,12 @@ const Step1OrderData = ({ form, setForm, customers, models, sizes, token, onMode
     newItems[idx].model_id = newModel.id;
     setForm(f => ({ ...f, items: newItems }));
     setShowCreateModel(null);
+  };
+
+  const handleCustomerCreated = (newCustomer) => {
+    // Add to local customers list (parent will re-fetch on mount)
+    setForm(f => ({ ...f, customer_id: newCustomer.id }));
+    setShowCreateCustomer(false);
   };
 
   return (
@@ -198,12 +356,26 @@ const Step1OrderData = ({ form, setForm, customers, models, sizes, token, onMode
           <select
             className="w-full h-10 px-3 rounded-[var(--radius-control)] border border-border bg-[var(--input-surface)] text-foreground"
             value={form.customer_id}
-            onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))}
+            onChange={e => {
+              if (e.target.value === '__create_new__') {
+                setShowCreateCustomer(true);
+                return;
+              }
+              setForm(f => ({ ...f, customer_id: e.target.value }));
+            }}
             data-testid="wizard-customer-select"
           >
             <option value="">— Pilih Pelanggan —</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value="__create_new__" className="text-primary font-medium">✚ Tambah Customer Baru...</option>
           </select>
+          {showCreateCustomer && (
+            <InlineCustomerCreateForm
+              token={token}
+              onCreated={handleCustomerCreated}
+              onCancel={() => setShowCreateCustomer(false)}
+            />
+          )}
         </div>
       )}
 
@@ -274,6 +446,18 @@ const Step1OrderData = ({ form, setForm, customers, models, sizes, token, onMode
                       const newItems = [...form.items];
                       newItems[idx].qty = e.target.value;
                       setForm(f => ({ ...f, items: newItems }));
+                    }}
+                    onBlur={e => {
+                      // Remove leading zeros on blur
+                      const val = e.target.value;
+                      if (val && val !== '') {
+                        const normalized = parseInt(val, 10) || '';
+                        if (String(normalized) !== val) {
+                          const newItems = [...form.items];
+                          newItems[idx].qty = normalized;
+                          setForm(f => ({ ...f, items: newItems }));
+                        }
+                      }
                     }}
                     className="w-20 h-9 text-sm"
                     data-testid={`wizard-item-qty-${idx}`}
@@ -368,6 +552,7 @@ const MaterialCombobox = ({ value, onChange, materials, placeholder = "Cari / pi
       <div
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-2 h-8 px-2 rounded-lg border border-border bg-[var(--input-surface)] cursor-pointer hover:border-primary/50 transition-colors"
+        data-testid="material-combobox-trigger"
       >
         {selectedMat ? (
           <>
@@ -381,18 +566,20 @@ const MaterialCombobox = ({ value, onChange, materials, placeholder = "Cari / pi
         <Search className="w-3 h-3 text-muted-foreground shrink-0" />
       </div>
       {open && (
-        <div className="absolute z-50 top-9 left-0 right-0 bg-[var(--glass-bg)] border border-border rounded-lg shadow-xl overflow-hidden">
+        <div className="absolute z-[100] top-9 left-0 right-0 bg-card border border-border rounded-lg shadow-2xl overflow-hidden"
+          data-testid="material-combobox-menu">
           <div className="p-1.5 border-b border-border/60">
             <input
               autoFocus
-              className="w-full h-7 px-2 text-xs rounded bg-[var(--input-surface)] border border-border/40 outline-none"
+              className="w-full h-7 px-2 text-xs rounded bg-[var(--input-surface)] border border-border/40 outline-none focus:ring-2 focus:ring-primary/50"
               placeholder="Ketik untuk cari..."
               value={query}
               onChange={e => setQuery(e.target.value)}
               onClick={e => e.stopPropagation()}
+              data-testid="material-combobox-search"
             />
           </div>
-          <div className="max-h-44 overflow-y-auto">
+          <div className="max-h-64 overflow-y-auto">
             {filtered.length === 0 ? (
               <div className="px-3 py-2 text-xs text-muted-foreground italic">Tidak ada hasil</div>
             ) : filtered.map(m => (
@@ -400,6 +587,7 @@ const MaterialCombobox = ({ value, onChange, materials, placeholder = "Cari / pi
                 key={m.id}
                 onClick={() => { onChange(m); setOpen(false); setQuery(''); }}
                 className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-primary/10 transition-colors ${value === m.id ? 'bg-primary/10' : ''}`}
+                data-testid={`material-option-${m.id}`}
               >
                 <MatTypeBadge type={m.type} />
                 <span className="text-xs text-foreground flex-1">{m.name}</span>
@@ -409,6 +597,7 @@ const MaterialCombobox = ({ value, onChange, materials, placeholder = "Cari / pi
             <div
               onClick={() => { onChange({ id: '__new__' }); setOpen(false); setQuery(''); }}
               className="flex items-center gap-2 px-2 py-2 cursor-pointer hover:bg-primary/10 text-primary border-t border-border/40"
+              data-testid="material-combobox-add-new"
             >
               <Plus className="w-3 h-3" />
               <span className="text-xs font-medium">Tambah Bahan Baru ke Master Data...</span>
@@ -557,6 +746,16 @@ const MaterialSelectRow = ({ mat, idx, materials, token, onMaterialsChange, allM
             type="number" placeholder="Jumlah" min="0" step="0.001"
             value={mat.total_qty_for_wo}
             onChange={e => update('total_qty_for_wo', e.target.value)}
+            onBlur={e => {
+              // Remove leading zeros on blur
+              const val = e.target.value;
+              if (val && val !== '') {
+                const normalized = parseFloat(val) || '';
+                if (String(normalized) !== val) {
+                  update('total_qty_for_wo', normalized);
+                }
+              }
+            }}
             className="w-24 h-8 text-xs"
           />
           <span className="text-xs text-muted-foreground whitespace-nowrap">{unitLabel}</span>
@@ -1040,7 +1239,7 @@ export default function ProductionWizardModule({ token, isGlobalMount = false })
         <div className="flex gap-4 flex-1 overflow-hidden">
           <WizardStepper currentStep={step} />
 
-          <div className="flex-1 overflow-y-auto pr-2">
+          <div className="flex-1 overflow-y-auto pr-2 relative">
             {error && (
               <div className="bg-red-400/10 border border-red-300/20 rounded-lg p-3 mb-4 text-sm text-red-300">
                 {error}

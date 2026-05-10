@@ -1,22 +1,38 @@
 [
   {
-    "content": "Backend: Tambah endpoint upload/serve image model (local base64 storage)",
+    "content": "Issue #4 — Pindahkan setup borongan ke Production Wizard (frontend)",
+    "status": "pending"
+  },
+  {
+    "content": "Issue #4 — Update backend wizard untuk terima process_rates",
+    "status": "pending"
+  },
+  {
+    "content": "Testing — Call testing_agent_v3 untuk comprehensive test (frontend + backend)",
+    "status": "in_progress"
+  },
+  {
+    "content": "Fix semua bug priority tinggi yang ditemukan testing agent",
+    "status": "pending"
+  },
+  {
+    "content": "Issue #6 — Backend validation: Block order completion sebelum PACKING",
     "status": "completed"
   },
   {
-    "content": "Backend: Update wizard BOM creation - total_qty_for_wo bukan qty_per_pcs",
+    "content": "Issue #1 — Tambah inline customer creation di Wizard & Orders modal",
     "status": "completed"
   },
   {
-    "content": "Frontend: Material input di Wizard Step 2 - dropdown master data + inline create + kategori",
+    "content": "Issue #3 — Hide 'Generate WO' button jika wo_count > 0 (list & detail)",
     "status": "completed"
   },
   {
-    "content": "Frontend: LKP (LineBoardModule) - tampil foto model + upload langsung ke master data",
+    "content": "Issue #2 — Fix UI overlap di dropdown wizard (z-index & overflow)",
     "status": "completed"
   },
   {
-    "content": "Test semua 3 improvements",
+    "content": "Issue #5 — Fix leading zero di number inputs (LusinPcsInput + standard inputs)",
     "status": "completed"
   }
 ]
